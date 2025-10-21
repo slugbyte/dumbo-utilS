@@ -19,30 +19,9 @@ pub fn exists(self: WorkDir, path: []const u8) !bool {
     return true;
 }
 
-var path_buffer_trash: [std.fs.max_path_bytes]u8 = undefined;
-pub fn pathForTrash(self: WorkDir, path: []const u8) ![]const u8 {
-    _ = self;
-    const basename = std.fs.path.basename(path);
-    var trash_dir_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const trash_dir = try util.bufEnv(&trash_dir_buffer, "trash") orelse {
-        return error.EnvTrashNotSet;
-    };
-    return std.fmt.bufPrint(&path_buffer_trash, "{s}/TRASH_{d}__{s}", .{ trash_dir, std.time.milliTimestamp(), basename }) catch {
-        return error.FailedToCreateTrashPath;
-    };
-}
-
-var path_buffer_backup: [std.fs.max_path_bytes]u8 = undefined;
-pub fn pathForBackup(self: WorkDir, path: []const u8) ![]const u8 {
-    _ = self;
-    return std.fmt.bufPrint(&path_buffer_backup, "{s}.backup~", .{path}) catch {
-        return error.FailedToCreateBackupPath;
-    };
-}
-
 pub fn trash(self: WorkDir, path: []const u8) ![]const u8 {
-    const trash_path = try self.pathForTrash(path);
-    try self.cwd.rename(path, trash_path);
+    const trash_path = try util.path.trashPathFromPath(path);
+    try self.move(path, trash_path);
     return trash_path;
 }
 

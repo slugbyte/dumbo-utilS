@@ -94,14 +94,14 @@ pub fn main() !void {
         }
         switch (flag_overwrite_style) {
             .NoClobberError => util.exit("ERROR: destination file exists. Use --trash --overwrite or --backup", .{}),
-            .Trash => util.log("trashed: {s}", .{try cwd.trash(path_destinaton)}),
+            .Trash => util.log("dest trashed: {s}", .{try cwd.trash(path_destinaton)}),
             .Backup => {
-                const path_destinaton_backup = try cwd.pathForBackup(path_destinaton);
+                const path_destinaton_backup = try util.path.backupPathFromPath(path_destinaton);
                 if (try cwd.exists(path_destinaton_backup)) {
                     util.log("previous backup trashed: {s}", .{try cwd.trash(path_destinaton_backup)});
                 }
                 try cwd.move(path_destinaton, path_destinaton_backup);
-                util.log("backup created: {s}", .{path_destinaton_backup});
+                util.log("dest backup: {s}", .{path_destinaton_backup});
             },
             .Force => {},
         }

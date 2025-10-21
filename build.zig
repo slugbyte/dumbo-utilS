@@ -10,7 +10,7 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "move",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/move.zig"),
+            .root_source_file = b.path("src/exec/move.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{
