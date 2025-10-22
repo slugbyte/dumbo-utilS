@@ -1,16 +1,22 @@
 const std = @import("std");
 const util = @import("util");
+const build = @import("build");
 
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 const FlagParser = struct {
     help: bool = false,
+    version: bool = false,
     silent: bool = false,
     index_cache_buffer: [20]usize = undefined,
 
     pub fn parse(self: *FlagParser, arg: [:0]const u8) bool {
         if (util.ArgIterator.isArgFlag(arg, "--help", "-h")) {
             self.help = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--version", null)) {
+            self.version = true;
             return true;
         }
         if (util.ArgIterator.isArgFlag(arg, "--silent", "-s")) {
@@ -38,8 +44,12 @@ pub fn main() !void {
             \\  --verbose -v       print trash paths
             \\  --help    -h       display help
         ;
-
         util.log("{s}", .{help_msg});
+        return;
+    }
+
+    if (flag.version) {
+        util.log("trash {s} {s} ({s})", .{ build.version, build.git_hash, build.date });
         return;
     }
 
