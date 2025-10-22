@@ -18,9 +18,9 @@ pub fn build(b: *std.Build) void {
     const opt_date = b.option([]const u8, "date", "date");
     const opt_git_hash = b.option([]const u8, "git_hash", "git hash");
 
-    opts.addOption([]const u8, "version", opt_version orelse "");
-    opts.addOption([]const u8, "date", opt_date orelse "");
-    opts.addOption([]const u8, "git_hash", opt_git_hash orelse "");
+    opts.addOption([]const u8, "version", opt_version orelse "v?");
+    opts.addOption([]const u8, "date", opt_date orelse "yymmdd hh:mm");
+    opts.addOption([]const u8, "git_hash", opt_git_hash orelse "debug");
 
     const exec_list: [2]Exec = .{
         .{

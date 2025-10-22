@@ -13,8 +13,9 @@ pub fn main() !void {
     if (flag.help) {
         const help =
             \\Usage: move src.. dest (--flags)
-            \\  move or rename a file, or move multiple files into a directory.
-            \\  when moveing multiple files last file must be a directory.
+            \\  Move or rename a file, or move multiple files into a directory.
+            \\  When moving multiple files last file must be a directory.
+            \\
             \\  Clobber Style:
             \\    (default)  error with warning
             \\    -f --force    overwrite the file
@@ -23,18 +24,20 @@ pub fn main() !void {
             \\
             \\    If mulitiple clober flags the presidence is (backup > trash > force > default).
             \\  
-            \\  Other:
+            \\  Other Flags:
+            \\    --version     print version
             \\    -r --rename   just replace the basename with dest
             \\    -s --silent   dont print clobber info
             \\    -v --verbose  print the move paths
             \\    -h --help     print this help
         ;
-        return util.exit("{s}", .{help});
+        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help, build.version, build.git_hash, build.date });
+        return;
     }
 
     if (flag.version) {
         util.log("move {s} {s} ({s})", .{ build.version, build.git_hash, build.date });
-        return std.process.exit(0);
+        return;
     }
 
     _ = args.skip();

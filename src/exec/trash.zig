@@ -1,31 +1,7 @@
 const std = @import("std");
 const util = @import("util");
 const build = @import("build");
-
 const Sha256 = std.crypto.hash.sha2.Sha256;
-
-const FlagParser = struct {
-    help: bool = false,
-    version: bool = false,
-    silent: bool = false,
-    index_cache_buffer: [20]usize = undefined,
-
-    pub fn parse(self: *FlagParser, arg: [:0]const u8) bool {
-        if (util.ArgIterator.isArgFlag(arg, "--help", "-h")) {
-            self.help = true;
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--version", null)) {
-            self.version = true;
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--silent", "-s")) {
-            self.silent = true;
-            return true;
-        }
-        return false;
-    }
-};
 
 pub fn main() !void {
     if (!try util.env.exists("trash")) {
@@ -39,12 +15,13 @@ pub fn main() !void {
     }
 
     if (flag.help) {
-        const help_msg =
+        const help =
             \\USAGE: trash [files].. (--flags)
-            \\  --verbose -v       print trash paths
-            \\  --help    -h       display help
+            \\  --version      print version
+            \\  --s --silent   dont print trash paths
+            \\  --h --help     display help
         ;
-        util.log("{s}", .{help_msg});
+        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help, build.version, build.git_hash, build.date });
         return;
     }
 
@@ -70,3 +47,26 @@ pub fn main() !void {
         }
     }
 }
+
+const FlagParser = struct {
+    help: bool = false,
+    version: bool = false,
+    silent: bool = false,
+    index_cache_buffer: [20]usize = undefined,
+
+    pub fn parse(self: *FlagParser, arg: [:0]const u8) bool {
+        if (util.ArgIterator.isArgFlag(arg, "--help", "-h")) {
+            self.help = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--version", null)) {
+            self.version = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--silent", "-s")) {
+            self.silent = true;
+            return true;
+        }
+        return false;
+    }
+};
