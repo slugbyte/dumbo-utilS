@@ -1,6 +1,5 @@
 const std = @import("std");
 const util = @import("util");
-var trash_dir: []const u8 = undefined;
 
 const OverwriteStyle = enum(u3) {
     NoClobberError = 0, // DEFAULT
@@ -15,96 +14,172 @@ const OverwriteStyle = enum(u3) {
     }
 };
 
+const FlagParser = struct {
+    help: bool = false,
+    rename: bool = false,
+    silent: bool = false,
+    verbose: bool = false,
+    overwrite_style: OverwriteStyle = .NoClobberError,
+    index_cache_buffer: [20]usize = undefined,
+
+    pub fn parse(self: *FlagParser, arg: [:0]const u8) bool {
+        if (util.ArgIterator.isArgFlag(arg, "--trash", "-t")) {
+            self.overwrite_style.prioritySet(.Trash);
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--backup", "-b")) {
+            self.overwrite_style.prioritySet(.Backup);
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--force", "-f")) {
+            self.overwrite_style.prioritySet(.Force);
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--verbose", "-v")) {
+            self.verbose = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--silent", "-s")) {
+            self.silent = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--rename", "-r")) {
+            self.rename = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--help", "-h")) {
+            self.help = true;
+            return true;
+        }
+        return false;
+    }
+};
+
+pub fn move(flag: FlagParser, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]const u8) !void {
+    var dest_path = dest;
+    var rename_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    var into_dir = false;
+
+    if (!try cwd.exists(src)) {
+        return util.exit("FILE NOT FOUND! {s}", .{src});
+    }
+    if (std.mem.endsWith(u8, dest_path, "/")) {
+        if (!try cwd.exists(dest_path) or (try cwd.stat(dest_path)).kind != .directory) {
+            return util.exit("dir not found: {s}", .{dest_path});
+        }
+        const file_name = std.fs.path.basename(src);
+        dest_path = try std.fmt.bufPrintZ(&rename_buffer, "{s}/{s}", .{ dest_path, file_name });
+        into_dir = true;
+    }
+    if (flag.rename) {
+        if (into_dir) {
+            return util.exit("ERROR: --rename cannot be used when moving a file into a directiory.", .{});
+        }
+        const dest_dirname = std.fs.path.dirname(src) orelse "";
+        dest_path = try std.fmt.bufPrintZ(&rename_buffer, "{s}/{s}", .{ dest_dirname, dest_path });
+    }
+    if (try cwd.exists(dest_path)) {
+        if (try cwd.isPathEqual(src, dest_path)) {
+            return util.exit("ERROR: src and dest cannot be the same location.", .{});
+        }
+        switch (flag.overwrite_style) {
+            .NoClobberError => util.exit("ERROR: dest file exists. Use --trash --overwrite or --backup", .{}),
+            .Trash => {
+                const stat = try cwd.stat(dest_path);
+                const trash_path = cwd.trashKind(dest_path, stat.kind) catch |err| switch (err) {
+                    error.TrashFileKindNotSupported => {
+                        return util.exit("ERROR: dest exists but kind ({s}) cannot be trashed", .{@tagName(stat.kind)});
+                    },
+                    else => return err,
+                };
+                if (!flag.silent) util.log("dest trashed: {s}", .{trash_path});
+            },
+            .Backup => {
+                const path_destinaton_backup = try util.path.backupPathFromPath(dest_path);
+                if (try cwd.exists(path_destinaton_backup)) {
+                    const stat = try cwd.stat(path_destinaton_backup);
+                    const trash_path = cwd.trashKind(path_destinaton_backup, stat.kind) catch |err| switch (err) {
+                        error.TrashFileKindNotSupported => {
+                            return util.exit("ERROR: prev backup exists but kind ({s}) cannot be trashed", .{@tagName(stat.kind)});
+                        },
+                        else => return err,
+                    };
+                    if (!flag.silent) util.log("backup trashed: {s}", .{trash_path});
+                }
+                try cwd.move(dest_path, path_destinaton_backup);
+                if (!flag.silent) util.log("backup created: {s}", .{path_destinaton_backup});
+            },
+            .Force => {},
+        }
+    }
+    try cwd.move(src, dest_path);
+    if (flag.verbose) {
+        util.log("{s} -> {s}", .{ src, dest_path });
+    }
+}
+
 pub fn main() !void {
-    var debug_allocator = std.heap.DebugAllocator(.{}).init;
-    const allocator = debug_allocator.allocator();
-    const args = try std.process.argsAlloc(allocator);
-    trash_dir = try std.process.getEnvVarOwned(allocator, "trash");
-
-    if (trash_dir.len == 0) {
-        return util.exit("$trash env must be set", .{});
+    if (!try util.env.exists("trash")) {
+        return util.exit("ERROR: $trash must be set", .{});
     }
+
+    var flag = FlagParser{};
+    var args = util.ArgIterator.initWithFlags(&flag);
+
     if (args.len < 2) {
-        util.exit("", .{});
-        return util.exit("noting to do :(", .{});
+        return util.exit("USAGE: move src dest [--flags]", .{});
     }
 
-    var flag_help = false;
-    var flag_overwrite_style: OverwriteStyle = .NoClobberError;
-    var path_list: [2][:0]const u8 = undefined;
-    var path_index: usize = 0;
-
-    for (args[1..]) |arg| {
-        var is_flag = false;
-        if (std.mem.eql(u8, "--trash", arg) or std.mem.eql(u8, "-t", arg)) {
-            flag_overwrite_style.prioritySet(.Trash);
-            is_flag = true;
-        }
-        if (std.mem.eql(u8, "--backup", arg) or std.mem.eql(u8, "-b", arg)) {
-            flag_overwrite_style.prioritySet(.Backup);
-            is_flag = true;
-        }
-        if (std.mem.eql(u8, "--force", arg) or std.mem.eql(u8, "-f", arg)) {
-            flag_overwrite_style.prioritySet(.Force);
-            is_flag = true;
-        }
-        if (std.mem.eql(u8, "--help", arg) or std.mem.eql(u8, "-h", arg)) {
-            flag_help = true;
-        }
-        if (!is_flag and path_index == path_list.len) {
-            return util.exit("ERROR: a non-flag occured and there are allready two paths ({s})", .{arg});
-        }
-        if (!is_flag and path_index < path_list.len) {
-            path_list[path_index] = arg;
-            path_index += 1;
-        }
-    }
-
-    if (flag_help) {
+    if (flag.help) {
         const help =
-            \\Usage: move src dest [flags] 
+            \\Usage: move src.. dest (--flags)
+            \\  move or rename a file, or move multiple files into a directory.
+            \\  when moveing multiple files last file must be a directory.
             \\  Clobber Style:
             \\    (default)  error with warning
             \\    -f --force    overwrite the file
             \\    -t --trash    move to trash         $trash/TRASH_{unixtimesamp}__{dest_basename}
             \\    -b --backup   rename the dest file  {dest}.backup~
             \\
-            \\    if mulitiple clober flags the presidence is (backup > trash > force > default)
+            \\    If mulitiple clober flags the presidence is (backup > trash > force > default).
             \\  
             \\  Other:
-            \\    --help     print this help
+            \\    -r --rename   just replace the basename with dest
+            \\    -s --silent   dont print clobber info
+            \\    -v --verbose  print the move paths
+            \\    -h --help     print this help
         ;
         return util.exit("{s}", .{help});
     }
 
-    if (path_index != path_list.len) {
-        return util.exit("USAGE: move src dest [--flags]", .{});
+    _ = args.skip();
+    const cwd = util.WorkDir.init();
+    const path_count = args.len - args.flag_index_cache.items.len - 1;
+    switch (path_count) {
+        0, 1 => {
+            return util.exit("USAGE: move src dest [--flags]", .{});
+        },
+        2 => {
+            return try move(
+                flag,
+                cwd,
+                args.nextNonFlag().?, // src_path
+                args.nextNonFlag().?, // dest_path
+            );
+        },
+        else => {
+            var dest_path: [:0]const u8 = undefined;
+            for (0..path_count) |_| {
+                dest_path = args.nextNonFlag().?;
+            }
+            if (!try cwd.exists(dest_path) or (try cwd.stat(dest_path)).kind != .directory) {
+                return util.exit("ERROR: dest must be a directory. {s}", .{dest_path});
+            }
+            args.reset();
+            _ = args.skip();
+            for (0..path_count - 1) |_| {
+                try move(flag, cwd, args.nextNonFlag().?, dest_path);
+            }
+        },
     }
-
-    var cwd = util.WorkDir.init();
-    const path_to_move = path_list[0];
-    const path_destinaton = path_list[1];
-
-    if (!try cwd.exists(path_to_move)) {
-        return util.exit("FILE NOT FOUND! {s}", .{path_to_move});
-    }
-    if (try cwd.exists(path_destinaton)) {
-        if (try cwd.isPathEqual(path_to_move, path_destinaton)) {
-            return util.exit("ERROR: src and dest cannot be the same location.", .{});
-        }
-        switch (flag_overwrite_style) {
-            .NoClobberError => util.exit("ERROR: destination file exists. Use --trash --overwrite or --backup", .{}),
-            .Trash => util.log("dest trashed: {s}", .{try cwd.trash(path_destinaton)}),
-            .Backup => {
-                const path_destinaton_backup = try util.path.backupPathFromPath(path_destinaton);
-                if (try cwd.exists(path_destinaton_backup)) {
-                    util.log("previous backup trashed: {s}", .{try cwd.trash(path_destinaton_backup)});
-                }
-                try cwd.move(path_destinaton, path_destinaton_backup);
-                util.log("dest backup: {s}", .{path_destinaton_backup});
-            },
-            .Force => {},
-        }
-    }
-    try cwd.move(path_to_move, path_destinaton);
 }

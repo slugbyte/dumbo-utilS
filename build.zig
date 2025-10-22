@@ -1,5 +1,10 @@
 const std = @import("std");
 
+const Exec = struct {
+    path: []const u8,
+    name: []const u8,
+};
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -7,23 +12,38 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/root.zig"),
         .target = target,
     });
-    const exe = b.addExecutable(.{
-        .name = "move",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/exec/move.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "util", .module = mod },
-            },
-        }),
-    });
-    b.installArtifact(exe);
-    const run_step = b.step("run", "Run the app");
-    const run_cmd = b.addRunArtifact(exe);
-    run_step.dependOn(&run_cmd.step);
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
+
+    const exec_list: [2]Exec = .{
+        .{
+            .name = "move",
+            .path = "./src/exec/move.zig",
+        },
+        .{
+            .name = "trash",
+            .path = "./src/exec/trash.zig",
+        },
+    };
+
+    for (exec_list) |exec| {
+        const exe = b.addExecutable(.{
+            .name = exec.name,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(exec.path),
+                .target = target,
+                .optimize = optimize,
+                .imports = &.{
+                    .{ .name = "util", .module = mod },
+                },
+            }),
+        });
+        b.installArtifact(exe);
+        var buffer: [1024]u8 = undefined;
+        const run_step = b.step(std.fmt.bufPrint(&buffer, "run_{s}", .{exec.name}) catch unreachable, "Run the app");
+        const run_cmd = b.addRunArtifact(exe);
+        run_step.dependOn(&run_cmd.step);
+        run_cmd.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_cmd.addArgs(args);
+        }
     }
 }
