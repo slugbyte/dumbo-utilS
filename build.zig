@@ -13,6 +13,15 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    var opts = b.addOptions();
+    const opt_version = b.option([]const u8, "version", "version");
+    const opt_date = b.option([]const u8, "date", "date");
+    const opt_git_hash = b.option([]const u8, "git_hash", "git hash");
+
+    opts.addOption([]const u8, "version", opt_version orelse "");
+    opts.addOption([]const u8, "date", opt_date orelse "");
+    opts.addOption([]const u8, "git_hash", opt_git_hash orelse "");
+
     const exec_list: [2]Exec = .{
         .{
             .name = "move",
@@ -33,6 +42,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
                 .imports = &.{
                     .{ .name = "util", .module = mod },
+                    .{ .name = "build", .module = opts.createModule() },
                 },
             }),
         });

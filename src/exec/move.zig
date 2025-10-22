@@ -1,59 +1,73 @@
 const std = @import("std");
 const util = @import("util");
+const build = @import("build");
 
-const OverwriteStyle = enum(u3) {
-    NoClobberError = 0, // DEFAULT
-    Force = 1,
-    Trash = 2,
-    Backup = 3,
-
-    pub fn prioritySet(self: *OverwriteStyle, value: OverwriteStyle) void {
-        if (@intFromEnum(self.*) < @intFromEnum(value)) {
-            self.* = value;
-        }
+pub fn main() !void {
+    if (!try util.env.exists("trash")) {
+        return util.exit("ERROR: $trash must be set", .{});
     }
-};
 
-const FlagParser = struct {
-    help: bool = false,
-    rename: bool = false,
-    silent: bool = false,
-    verbose: bool = false,
-    overwrite_style: OverwriteStyle = .NoClobberError,
-    index_cache_buffer: [20]usize = undefined,
+    var flag = FlagParser{};
+    var args = util.ArgIterator.initWithFlags(&flag);
 
-    pub fn parse(self: *FlagParser, arg: [:0]const u8) bool {
-        if (util.ArgIterator.isArgFlag(arg, "--trash", "-t")) {
-            self.overwrite_style.prioritySet(.Trash);
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--backup", "-b")) {
-            self.overwrite_style.prioritySet(.Backup);
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--force", "-f")) {
-            self.overwrite_style.prioritySet(.Force);
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--verbose", "-v")) {
-            self.verbose = true;
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--silent", "-s")) {
-            self.silent = true;
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--rename", "-r")) {
-            self.rename = true;
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--help", "-h")) {
-            self.help = true;
-            return true;
-        }
-        return false;
+    if (flag.help) {
+        const help =
+            \\Usage: move src.. dest (--flags)
+            \\  move or rename a file, or move multiple files into a directory.
+            \\  when moveing multiple files last file must be a directory.
+            \\  Clobber Style:
+            \\    (default)  error with warning
+            \\    -f --force    overwrite the file
+            \\    -t --trash    move to trash         $trash/TRASH_{unixtimesamp}__{dest_basename}
+            \\    -b --backup   rename the dest file  {dest}.backup~
+            \\
+            \\    If mulitiple clober flags the presidence is (backup > trash > force > default).
+            \\  
+            \\  Other:
+            \\    -r --rename   just replace the basename with dest
+            \\    -s --silent   dont print clobber info
+            \\    -v --verbose  print the move paths
+            \\    -h --help     print this help
+        ;
+        return util.exit("{s}", .{help});
     }
-};
+
+    if (flag.version) {
+        util.log("move {s} {s} ({s})", .{ build.version, build.git_hash, build.date });
+        return std.process.exit(0);
+    }
+
+    _ = args.skip();
+    const cwd = util.WorkDir.init();
+    const path_count = args.len - args.flag_index_cache.items.len - 1;
+    switch (path_count) {
+        0, 1 => {
+            return util.exit("USAGE: move src dest [--flags]", .{});
+        },
+        2 => {
+            return try move(
+                flag,
+                cwd,
+                args.nextNonFlag().?, // src_path
+                args.nextNonFlag().?, // dest_path
+            );
+        },
+        else => {
+            var dest_path: [:0]const u8 = undefined;
+            for (0..path_count) |_| {
+                dest_path = args.nextNonFlag().?;
+            }
+            if (!try cwd.exists(dest_path) or (try cwd.stat(dest_path)).kind != .directory) {
+                return util.exit("ERROR: dest must be a directory. {s}", .{dest_path});
+            }
+            args.reset();
+            _ = args.skip();
+            for (0..path_count - 1) |_| {
+                try move(flag, cwd, args.nextNonFlag().?, dest_path);
+            }
+        },
+    }
+}
 
 pub fn move(flag: FlagParser, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]const u8) !void {
     var dest_path = dest;
@@ -83,7 +97,7 @@ pub fn move(flag: FlagParser, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]co
             return util.exit("ERROR: src and dest cannot be the same location.", .{});
         }
         switch (flag.overwrite_style) {
-            .NoClobberError => util.exit("ERROR: dest file exists. Use --trash --overwrite or --backup", .{}),
+            .NoClobberError => util.exit("ERROR: dest file exists. Use clobber flags or add '/' to move into dir.", .{}),
             .Trash => {
                 const stat = try cwd.stat(dest_path);
                 const trash_path = cwd.trashKind(dest_path, stat.kind) catch |err| switch (err) {
@@ -118,68 +132,61 @@ pub fn move(flag: FlagParser, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]co
     }
 }
 
-pub fn main() !void {
-    if (!try util.env.exists("trash")) {
-        return util.exit("ERROR: $trash must be set", .{});
-    }
+const FlagParser = struct {
+    help: bool = false,
+    version: bool = false,
+    rename: bool = false,
+    silent: bool = false,
+    verbose: bool = false,
+    overwrite_style: OverwriteStyle = .NoClobberError,
+    index_cache_buffer: [20]usize = undefined,
 
-    var flag = FlagParser{};
-    var args = util.ArgIterator.initWithFlags(&flag);
+    pub const OverwriteStyle = enum(u3) {
+        NoClobberError = 0, // DEFAULT
+        Force = 1,
+        Trash = 2,
+        Backup = 3,
 
-    if (args.len < 2) {
-        return util.exit("USAGE: move src dest [--flags]", .{});
-    }
-
-    if (flag.help) {
-        const help =
-            \\Usage: move src.. dest (--flags)
-            \\  move or rename a file, or move multiple files into a directory.
-            \\  when moveing multiple files last file must be a directory.
-            \\  Clobber Style:
-            \\    (default)  error with warning
-            \\    -f --force    overwrite the file
-            \\    -t --trash    move to trash         $trash/TRASH_{unixtimesamp}__{dest_basename}
-            \\    -b --backup   rename the dest file  {dest}.backup~
-            \\
-            \\    If mulitiple clober flags the presidence is (backup > trash > force > default).
-            \\  
-            \\  Other:
-            \\    -r --rename   just replace the basename with dest
-            \\    -s --silent   dont print clobber info
-            \\    -v --verbose  print the move paths
-            \\    -h --help     print this help
-        ;
-        return util.exit("{s}", .{help});
-    }
-
-    _ = args.skip();
-    const cwd = util.WorkDir.init();
-    const path_count = args.len - args.flag_index_cache.items.len - 1;
-    switch (path_count) {
-        0, 1 => {
-            return util.exit("USAGE: move src dest [--flags]", .{});
-        },
-        2 => {
-            return try move(
-                flag,
-                cwd,
-                args.nextNonFlag().?, // src_path
-                args.nextNonFlag().?, // dest_path
-            );
-        },
-        else => {
-            var dest_path: [:0]const u8 = undefined;
-            for (0..path_count) |_| {
-                dest_path = args.nextNonFlag().?;
+        pub fn prioritySet(self: *OverwriteStyle, value: OverwriteStyle) void {
+            if (@intFromEnum(self.*) < @intFromEnum(value)) {
+                self.* = value;
             }
-            if (!try cwd.exists(dest_path) or (try cwd.stat(dest_path)).kind != .directory) {
-                return util.exit("ERROR: dest must be a directory. {s}", .{dest_path});
-            }
-            args.reset();
-            _ = args.skip();
-            for (0..path_count - 1) |_| {
-                try move(flag, cwd, args.nextNonFlag().?, dest_path);
-            }
-        },
+        }
+    };
+
+    pub fn parse(self: *FlagParser, arg: [:0]const u8) bool {
+        if (util.ArgIterator.isArgFlag(arg, "--trash", "-t")) {
+            self.overwrite_style.prioritySet(.Trash);
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--backup", "-b")) {
+            self.overwrite_style.prioritySet(.Backup);
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--force", "-f")) {
+            self.overwrite_style.prioritySet(.Force);
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--verbose", "-v")) {
+            self.verbose = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--silent", "-s")) {
+            self.silent = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--rename", "-r")) {
+            self.rename = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--version", null)) {
+            self.version = true;
+            return true;
+        }
+        if (util.ArgIterator.isArgFlag(arg, "--help", "-h")) {
+            self.help = true;
+            return true;
+        }
+        return false;
     }
-}
+};
