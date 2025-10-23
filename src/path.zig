@@ -20,13 +20,8 @@ pub fn trashPathNameTimestamp(file_name: []const u8) ![]const u8 {
 
 pub fn trashPathNameTimestampRandom(file_name: []const u8) ![]const u8 {
     const trash_dir = try trashDir();
-
     var rand_buffer: [4]u8 = undefined;
-    const size = std.os.linux.getrandom(&rand_buffer, 4, 0);
-    if (size != rand_buffer.len) {
-        return error.RandomNumberFailed;
-    }
-
+    std.crypto.random.bytes(&rand_buffer);
     return std.fmt.bufPrint(&buffer_trash_path, "{s}/{s}__{d}_{X}.trash", .{ trash_dir, file_name, std.time.milliTimestamp(), rand_buffer }) catch {
         return error.FailedToCreatePath;
     };

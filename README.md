@@ -1,16 +1,5 @@
 # utils
 
-## trash
-```
-  USAGE: trash [files].. (--flags)
-  --version      print version
-  --s --silent   dont print trash paths
-  --h --help     display help
-
-  Version:
-    v0.1 ff47595 (25.10.23 00:04)
-```
-
 ## move
 ```
 Usage: move src.. dest (--flags)
@@ -24,7 +13,7 @@ Usage: move src.. dest (--flags)
     -b --backup   rename the dest file  {dest}.backup~
 
     If mulitiple clober flags the presidence is (backup > trash > force > default).
-
+  
   Other Flags:
     --version     print version
     -r --rename   just replace the basename with dest
@@ -33,6 +22,16 @@ Usage: move src.. dest (--flags)
     -h --help     print this help
 
   Version:
-    v0.1 ff47595 (25.10.23 00:04)
+    v0.1 3f6b2bb (25.10.23 10:19)
 ```
 
+## trash
+```
+USAGE: trash [files].. (--flags)
+  --version      print version
+  --s --silent   dont print trash paths
+  --h --help     display help
+
+  Version:
+    v0.1 3f6b2bb (25.10.23 10:19)
+```

@@ -11,7 +11,7 @@ pub fn main() !void {
     var flag = FlagParser{};
     var args = util.ArgIterator.initWithFlags(&flag);
     if (args.len < 2) {
-        return util.exit("USAGE ERROR: trash [file]...", .{});
+        return util.exit("USAGE: trash [file]...", .{});
     }
 
     if (flag.help) {
