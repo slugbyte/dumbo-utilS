@@ -1,7 +1,17 @@
 const std = @import("std");
 const util = @import("util");
+const builtin = @import("builtin");
 const build = @import("build");
 const Sha256 = std.crypto.hash.sha2.Sha256;
+
+pub const help_msg =
+    \\USAGE: trash files.. (--flags)
+    \\  Move files to $trash.
+    \\
+    \\  --version      print version
+    \\  --s --silent   dont print trash paths
+    \\  --h --help     display help
+;
 
 pub fn main() !void {
     if (!try util.env.exists("trash")) {
@@ -15,13 +25,7 @@ pub fn main() !void {
     }
 
     if (flag.help) {
-        const help =
-            \\USAGE: trash [files].. (--flags)
-            \\  --version      print version
-            \\  --s --silent   dont print trash paths
-            \\  --h --help     display help
-        ;
-        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help, build.version, build.git_hash, build.date });
+        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help_msg, build.version, build.git_hash, build.date });
         return;
     }
 

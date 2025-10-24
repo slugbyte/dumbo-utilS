@@ -1,16 +1,32 @@
-# utils
+# utils for dummys like me.
 
-## move
+## about
+I lost work one too many times, by accidently overwriting it. I made these utils to
+reduce the chances that would happen again. They provide much less dangerous clobber
+strategys.
+ 
+### trash strategy
+* files become `$trash/(basename)__(hash).trash`
+* dirs and links `$trash/(basename)__(timestamp).trash`
+  * if there is a conflict it will be name `$trash/(basename)__(timestap)_(random).trash`
+
+## backup strategy
+* rename file `(original_path).backup~`
+  * if a backup exists it will be moved to trash
+
+## move (mv replacement)
+move or rename files without accidently replacing anything.
 ```
 Usage: move src.. dest (--flags)
   Move or rename a file, or move multiple files into a directory.
-  When moving multiple files last file must be a directory.
+  When moveing files into a directory dest must have '/' at the end.
+  When moving multiple files last path must be a directory and have a '/' at the end.
 
   Clobber Style:
     (default)  error with warning
     -f --force    overwrite the file
-    -t --trash    move to trash         $trash/TRASH_{unixtimesamp}__{dest_basename}
-    -b --backup   rename the dest file  {dest}.backup~
+    -t --trash    move to $trash
+    -b --backup   rename the dest file
 
     If mulitiple clober flags the presidence is (backup > trash > force > default).
   
@@ -20,18 +36,15 @@ Usage: move src.. dest (--flags)
     -s --silent   dont print clobber info
     -v --verbose  print the move paths
     -h --help     print this help
-
-  Version:
-    v0.1 3f6b2bb (25.10.23 10:19)
 ```
 
-## trash
+## trash (rm replacement)
+Move files into $trash with a naming strat that wont overwrite existing trashed files.
 ```
-USAGE: trash [files].. (--flags)
+USAGE: trash files.. (--flags)
+  Move files to $trash.
+
   --version      print version
   --s --silent   dont print trash paths
   --h --help     display help
-
-  Version:
-    v0.1 3f6b2bb (25.10.23 10:19)
 ```

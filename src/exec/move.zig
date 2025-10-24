@@ -2,6 +2,28 @@ const std = @import("std");
 const util = @import("util");
 const build = @import("build");
 
+pub const help_msg =
+    \\Usage: move src.. dest (--flags)
+    \\  Move or rename a file, or move multiple files into a directory.
+    \\  When moveing files into a directory dest must have '/' at the end.
+    \\  When moving multiple files last path must be a directory and have a '/' at the end.
+    \\
+    \\  Clobber Style:
+    \\    (default)  error with warning
+    \\    -f --force    overwrite the file
+    \\    -t --trash    move to $trash
+    \\    -b --backup   rename the dest file
+    \\
+    \\    If mulitiple clober flags the presidence is (backup > trash > force > default).
+    \\  
+    \\  Other Flags:
+    \\    --version     print version
+    \\    -r --rename   just replace the basename with dest
+    \\    -s --silent   dont print clobber info
+    \\    -v --verbose  print the move paths
+    \\    -h --help     print this help
+;
+
 pub fn main() !void {
     if (!try util.env.exists("trash")) {
         return util.exit("ERROR: $trash must be set", .{});
@@ -11,27 +33,7 @@ pub fn main() !void {
     var args = util.ArgIterator.initWithFlags(&flag);
 
     if (flag.help) {
-        const help =
-            \\Usage: move src.. dest (--flags)
-            \\  Move or rename a file, or move multiple files into a directory.
-            \\  When moving multiple files last file must be a directory.
-            \\
-            \\  Clobber Style:
-            \\    (default)  error with warning
-            \\    -f --force    overwrite the file
-            \\    -t --trash    move to trash         $trash/TRASH_{unixtimesamp}__{dest_basename}
-            \\    -b --backup   rename the dest file  {dest}.backup~
-            \\
-            \\    If mulitiple clober flags the presidence is (backup > trash > force > default).
-            \\  
-            \\  Other Flags:
-            \\    --version     print version
-            \\    -r --rename   just replace the basename with dest
-            \\    -s --silent   dont print clobber info
-            \\    -v --verbose  print the move paths
-            \\    -h --help     print this help
-        ;
-        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help, build.version, build.git_hash, build.date });
+        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help_msg, build.version, build.git_hash, build.date });
         return;
     }
 
