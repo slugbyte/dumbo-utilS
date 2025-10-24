@@ -24,12 +24,12 @@ pub fn main() !void {
     }
 
     if (flag.help) {
-        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help_msg, config.version, config.git_hash, config.date });
+        util.log("{s}\n\n  Version:\n   {s} {s} {s} ({s})", .{ help_msg, config.version, config.change_id[0..8], config.commit_id[0..8], config.date });
         return;
     }
 
     if (flag.version) {
-        util.log("trash {s} {s} ({s})", .{ config.version, config.git_hash, config.date });
+        util.log("trash {s} {s} {s} ({s})", .{ config.version, config.change_id[0..8], config.commit_id[0..8], config.date });
         return;
     }
 
