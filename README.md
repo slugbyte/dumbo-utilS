@@ -1,9 +1,8 @@
-# utils for dummys like me.
+# coreutil replacements for dumbos like me.
 
 ## about
-I lost work one too many times, by accidently overwriting it. I made these utils to
-reduce the chances that would happen again. They provide much less dangerous clobber
-strategys.
+I lost work one too many times, by accidently overwriting data with coreutils. I made these utils to
+reduce the chances that would happen again. They provide much less dangerous clobber strats.
  
 ### trash strategy
 * files become `$trash/(basename)__(hash).trash`

@@ -1,6 +1,6 @@
 const std = @import("std");
 const util = @import("util");
-const build = @import("build");
+const config = @import("config");
 
 pub const help_msg =
     \\Usage: move src.. dest (--flags)
@@ -33,17 +33,17 @@ pub fn main() !void {
     var args = util.ArgIterator.initWithFlags(&flag);
 
     if (flag.help) {
-        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help_msg, build.version, build.git_hash, build.date });
+        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help_msg, config.version, config.git_hash, config.date });
         return;
     }
 
     if (flag.version) {
-        util.log("move {s} {s} ({s})", .{ build.version, build.git_hash, build.date });
+        util.log("move {s} {s} ({s})", .{ config.version, config.git_hash, config.date });
         return;
     }
 
     _ = args.skip();
-    const cwd = util.WorkDir.init();
+    const wd = util.WorkDir.initCWD();
     const path_count = args.len - args.flag_index_cache.items.len - 1;
     switch (path_count) {
         0, 1 => {
@@ -52,7 +52,7 @@ pub fn main() !void {
         2 => {
             return try move(
                 flag,
-                cwd,
+                wd,
                 args.nextNonFlag().?, // src_path
                 args.nextNonFlag().?, // dest_path
             );
@@ -62,13 +62,13 @@ pub fn main() !void {
             for (0..path_count) |_| {
                 dest_path = args.nextNonFlag().?;
             }
-            if (!try cwd.exists(dest_path) or (try cwd.stat(dest_path)).kind != .directory) {
+            if (!try wd.exists(dest_path) or (try wd.stat(dest_path)).kind != .directory) {
                 return util.exit("ERROR: dest must be a directory. {s}", .{dest_path});
             }
             args.reset();
             _ = args.skip();
             for (0..path_count - 1) |_| {
-                try move(flag, cwd, args.nextNonFlag().?, dest_path);
+                try move(flag, wd, args.nextNonFlag().?, dest_path);
             }
         },
     }

@@ -1,7 +1,6 @@
 const std = @import("std");
 const util = @import("util");
-const builtin = @import("builtin");
-const build = @import("build");
+const config = @import("config");
 const Sha256 = std.crypto.hash.sha2.Sha256;
 
 pub const help_msg =
@@ -25,21 +24,21 @@ pub fn main() !void {
     }
 
     if (flag.help) {
-        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help_msg, build.version, build.git_hash, build.date });
+        util.log("{s}\n\n  Version:\n    {s} {s} ({s})", .{ help_msg, config.version, config.git_hash, config.date });
         return;
     }
 
     if (flag.version) {
-        util.log("trash {s} {s} ({s})", .{ build.version, build.git_hash, build.date });
+        util.log("trash {s} {s} ({s})", .{ config.version, config.git_hash, config.date });
         return;
     }
 
-    const cwd = util.WorkDir.init();
+    const wd = util.WorkDir.initCWD();
     _ = args.skip();
     while (args.nextNonFlag()) |arg| {
-        if (try cwd.exists(arg)) {
-            const stat = try cwd.stat(arg);
-            const trash_path = cwd.trashKind(arg, stat.kind) catch |err| switch (err) {
+        if (try wd.exists(arg)) {
+            const stat = try wd.stat(arg);
+            const trash_path = wd.trashKind(arg, stat.kind) catch |err| switch (err) {
                 error.TrashFileKindNotSupported => {
                     return util.exit("ERROR: can't trah kind ({s}). {s}", .{ @tagName(stat.kind), arg });
                 },

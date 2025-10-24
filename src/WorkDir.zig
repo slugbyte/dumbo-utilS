@@ -5,16 +5,20 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 
 const WorkDir = @This();
 
-cwd: std.fs.Dir,
+dir: std.fs.Dir,
 
-pub fn init() WorkDir {
+pub fn init(dir: std.fs.Dir) WorkDir {
     return .{
-        .cwd = std.fs.cwd(),
+        .dir = dir,
     };
 }
 
+pub fn initCWD() WorkDir {
+    return init(std.fs.cwd());
+}
+
 pub fn openFile(self: WorkDir, path: []const u8, open_flags: std.fs.File.OpenFlags) !std.fs.File {
-    return try self.cwd.openFile(path, open_flags);
+    return try self.dir.openFile(path, open_flags);
 }
 
 pub fn hashFileSha256(self: WorkDir, file: std.fs.File, digest_buffer: *[Sha256.digest_length]u8) !void {
@@ -39,11 +43,11 @@ pub fn hashFilePathSha256(self: WorkDir, path: []const u8, digest_buffer: *[Sha2
 }
 
 pub fn stat(self: WorkDir, path: []const u8) !std.fs.File.Stat {
-    return self.cwd.statFile(path);
+    return self.dir.statFile(path);
 }
 
 pub fn exists(self: WorkDir, path: []const u8) !bool {
-    self.cwd.access(path, .{}) catch |err| switch (err) {
+    self.dir.access(path, .{}) catch |err| switch (err) {
         error.FileNotFound => return false,
         else => return err,
     };
@@ -84,8 +88,8 @@ pub fn trashAutoKind(self: WorkDir, path: []const u8) ![]const u8 {
 pub fn isPathEqual(self: WorkDir, path_a: []const u8, path_b: []const u8) !bool {
     var buf_realpath_a: [std.fs.max_path_bytes]u8 = undefined;
     var buf_realpath_b: [std.fs.max_path_bytes]u8 = undefined;
-    const realpath_a = try self.cwd.realpath(path_a, &buf_realpath_a);
-    const realpath_b = try self.cwd.realpath(path_b, &buf_realpath_b);
+    const realpath_a = try self.dir.realpath(path_a, &buf_realpath_a);
+    const realpath_b = try self.dir.realpath(path_b, &buf_realpath_b);
     if (std.mem.eql(u8, realpath_a, realpath_b)) {
         return true;
     }
@@ -93,5 +97,5 @@ pub fn isPathEqual(self: WorkDir, path_a: []const u8, path_b: []const u8) !bool 
 }
 
 pub fn move(self: WorkDir, path_source: []const u8, path_destination: []const u8) !void {
-    try self.cwd.rename(path_source, path_destination);
+    try self.dir.rename(path_source, path_destination);
 }

@@ -1,39 +1,42 @@
 const std = @import("std");
-const Version = @import("./src/build/Version.zig");
-const UpdateReadme = @import("./src/build/UpdateReadme.zig");
-const GitNoDirty = @import("./src/build/GitNoDirty.zig");
-const addUtilExe = @import("./src/build/create_exe.zig").createExe;
-
-const Exec = struct {
-    path: []const u8,
-    name: []const u8,
-};
+const build_pkg = @import("./src/build/root.zig");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    const version = Version.init(b);
-
-    var build_mod = b.addOptions();
-    build_mod.addOption([]const u8, "version", version.version);
-    build_mod.addOption([]const u8, "date", version.date);
-    build_mod.addOption([]const u8, "git_hash", version.git_hash);
+    const config = build_pkg.Config.init(b);
 
     const util_mod = b.addModule("util", .{
         .root_source_file = b.path("src/root.zig"),
-        .target = target,
+        .target = config.target,
+        .optimize = config.optimize,
     });
 
-    const names: [2][]const u8 = .{ "move", "trash" };
-    for (names) |exec| {
-        _ = addUtilExe(b, target, optimize, exec, &.{
-            .{ .name = "util", .module = util_mod },
-            .{ .name = "build", .module = build_mod.createModule() },
+    const exe_list = [_][]const u8{
+        "move",
+        "trash",
+    };
+
+    for (exe_list) |exe_name| {
+        const exe = b.addExecutable(.{
+            .name = exe_name,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(b.fmt("src/exec/{s}.zig", .{exe_name})),
+                .target = config.target,
+                .optimize = config.optimize,
+                .imports = &.{
+                    .{ .name = "util", .module = util_mod },
+                    .{ .name = "config", .module = config.createOptionsModule() },
+                },
+            }),
         });
+        b.installArtifact(exe);
+        const run_cmd = b.addRunArtifact(exe);
+        if (b.args) |args| {
+            run_cmd.addArgs(args);
+        }
+        const run_step = b.step(b.fmt("run_{s}", .{exe_name}), b.fmt("Run {s} util.", .{exe_name}));
+        run_step.dependOn(&run_cmd.step);
     }
 
-    var install_step = b.getInstallStep();
-    var update_readme = UpdateReadme.init(b);
-    install_step.dependOn(&update_readme.step);
+    var update_readme = build_pkg.UpdateReadme.init(b);
+    b.getInstallStep().dependOn(&update_readme.step);
 }
