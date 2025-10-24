@@ -1,4 +1,5 @@
 # TODO
+* test
 * copy cmd
 * sort cmd
 * `--undo` flag for `move` `trash` and `copy`
