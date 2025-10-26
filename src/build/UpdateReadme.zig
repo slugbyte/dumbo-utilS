@@ -33,7 +33,8 @@ pub fn make(b: *std.Build.Step, opt: std.Build.Step.MakeOptions) !void {
 }
 
 const README_CONTENT =
-    \\# coreutil replacements for dumbos like me.
+    \\# safeutils
+    \\> coreutil replacements that aim to protect you from overwriting work.
     \\
     \\## about
     \\I lost work one too many times, by accidently overwriting data with coreutils. I made these utils to
