@@ -1,6 +1,8 @@
 const std = @import("std");
 const util = @import("util");
 const config = @import("config");
+const Args = util.Args;
+const basename = std.fs.path.basename;
 
 pub const help_msg =
     \\Usage: move src.. dest (--flags)
@@ -19,18 +21,20 @@ pub const help_msg =
     \\  Other Flags:
     \\    --version     print version
     \\    -r --rename   just replace the basename with dest
-    \\    -s --silent   dont print clobber info
-    \\    -v --verbose  print the move paths
+    \\    -s --silent   only print errors
     \\    -h --help     print this help
 ;
 
 pub fn main() !void {
+    var gpa = std.heap.DebugAllocator(.{}).init;
+    const allocator = gpa.allocator();
+
     if (!try util.env.exists("trash")) {
         return util.exit("ERROR: $trash must be set", .{});
     }
 
-    var flag = FlagParser{};
-    var args = util.ArgIterator.initWithFlags(&flag);
+    var flag = Flags{};
+    var args = try Args.init(allocator, &flag.flag_parser);
 
     if (flag.help) {
         util.log("{s}\n\n  Version:\n    {s} {s} {s} ({s})", .{ help_msg, config.version, config.change_id[0..8], config.commit_id[0..8], config.date });
@@ -38,13 +42,12 @@ pub fn main() !void {
     }
 
     if (flag.version) {
-        util.log("move {s} {s} {s} ({s})", .{ config.version, config.change_id[0..8], config.commit_id[0..8], config.date }); return;
+        util.log("move {s} {s} {s} ({s})", .{ config.version, config.change_id[0..8], config.commit_id[0..8], config.date });
+        return;
     }
 
-    _ = args.skip();
     const wd = util.WorkDir.initCWD();
-    const path_count = args.len - args.flag_index_cache.items.len - 1;
-    switch (path_count) {
+    switch (args.positional.len) {
         0, 1 => {
             return util.exit("USAGE: move src dest [--flags]", .{});
         },
@@ -52,28 +55,23 @@ pub fn main() !void {
             return try move(
                 flag,
                 wd,
-                args.nextNonFlag().?, // src_path
-                args.nextNonFlag().?, // dest_path
+                args.positional[0],
+                args.positional[1],
             );
         },
         else => {
-            var dest_path: [:0]const u8 = undefined;
-            for (0..path_count) |_| {
-                dest_path = args.nextNonFlag().?;
-            }
+            const dest_path: [:0]const u8 = args.positional[args.positional.len - 1];
             if (!try wd.exists(dest_path) or (try wd.stat(dest_path)).kind != .directory) {
                 return util.exit("ERROR: dest must be a directory. {s}", .{dest_path});
             }
-            args.reset();
-            _ = args.skip();
-            for (0..path_count - 1) |_| {
-                try move(flag, wd, args.nextNonFlag().?, dest_path);
+            for (args.positional[0 .. args.positional.len - 1]) |arg| {
+                try move(flag, wd, arg, dest_path);
             }
         },
     }
 }
 
-pub fn move(flag: FlagParser, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]const u8) !void {
+pub fn move(flag: Flags, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]const u8) !void {
     var dest_path = dest;
     var rename_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var into_dir = false;
@@ -110,7 +108,7 @@ pub fn move(flag: FlagParser, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]co
                     },
                     else => return err,
                 };
-                if (!flag.silent) util.log("dest trashed: {s}", .{trash_path});
+                if (!flag.silent) util.log("dest trashed: $trash/{s}", .{basename(trash_path)});
             },
             .Backup => {
                 const path_destinaton_backup = try util.path.backupPathFromPath(dest_path);
@@ -122,7 +120,7 @@ pub fn move(flag: FlagParser, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]co
                         },
                         else => return err,
                     };
-                    if (!flag.silent) util.log("backup trashed: {s}", .{trash_path});
+                    if (!flag.silent) util.log("backup trashed: $trash/{s}", .{basename(trash_path)});
                 }
                 try cwd.move(dest_path, path_destinaton_backup);
                 if (!flag.silent) util.log("backup created: {s}", .{path_destinaton_backup});
@@ -131,19 +129,21 @@ pub fn move(flag: FlagParser, cwd: util.WorkDir, src: [:0]const u8, dest: [:0]co
         }
     }
     try cwd.move(src, dest_path);
-    if (flag.verbose) {
+    if (!flag.silent) {
         util.log("{s} -> {s}", .{ src, dest_path });
     }
 }
 
-const FlagParser = struct {
+const Flags = struct {
     help: bool = false,
     version: bool = false,
     rename: bool = false,
     silent: bool = false,
-    verbose: bool = false,
     overwrite_style: OverwriteStyle = .NoClobberError,
-    index_cache_buffer: [20]usize = undefined,
+
+    flag_parser: Args.FlagParser = .{
+        .parseFn = Flags.implParseFn,
+    },
 
     pub const OverwriteStyle = enum(u3) {
         NoClobberError = 0, // DEFAULT
@@ -158,39 +158,39 @@ const FlagParser = struct {
         }
     };
 
-    pub fn parse(self: *FlagParser, arg: [:0]const u8) bool {
-        if (util.ArgIterator.isArgFlag(arg, "--trash", "-t")) {
+    pub fn implParseFn(flag_parser: *Args.FlagParser, arg: [:0]const u8, _: *Args.ArgIterator) Args.FlagParser.Error!bool {
+        var self = @as(*Flags, @fieldParentPtr("flag_parser", flag_parser));
+
+        if (Args.eqlFlag(arg, "--trash", "-t")) {
             self.overwrite_style.prioritySet(.Trash);
             return true;
         }
-        if (util.ArgIterator.isArgFlag(arg, "--backup", "-b")) {
+        if (Args.eqlFlag(arg, "--backup", "-b")) {
             self.overwrite_style.prioritySet(.Backup);
             return true;
         }
-        if (util.ArgIterator.isArgFlag(arg, "--force", "-f")) {
+        if (Args.eqlFlag(arg, "--force", "-f")) {
             self.overwrite_style.prioritySet(.Force);
             return true;
         }
-        if (util.ArgIterator.isArgFlag(arg, "--verbose", "-v")) {
-            self.verbose = true;
-            return true;
-        }
-        if (util.ArgIterator.isArgFlag(arg, "--silent", "-s")) {
+        if (Args.eqlFlag(arg, "--silent", "-s")) {
             self.silent = true;
             return true;
         }
-        if (util.ArgIterator.isArgFlag(arg, "--rename", "-r")) {
+        if (Args.eqlFlag(arg, "--rename", "-r")) {
             self.rename = true;
             return true;
         }
-        if (util.ArgIterator.isArgFlag(arg, "--version", null)) {
+        if (Args.eql(arg, "--version")) {
             self.version = true;
             return true;
         }
-        if (util.ArgIterator.isArgFlag(arg, "--help", "-h")) {
+
+        if (Args.eqlFlag(arg, "--help", "-h")) {
             self.help = true;
             return true;
         }
+
         return false;
     }
 };
