@@ -55,15 +55,20 @@ pub fn main() !void {
     }
 }
 
+const Wat = struct {
+    cool: []const u8,
+};
+
 const Flags = struct {
     help: bool = false,
     version: bool = false,
     silent: bool = false,
+
     flag_parser: Args.FlagParser = .{
         .parseFn = Flags.implParseFn,
     },
 
-    pub fn implParseFn(flag_parser: *Args.FlagParser, arg: [:0]const u8, _: *Args.ArgIterator) Args.FlagParser.Error!bool {
+    pub fn implParseFn(flag_parser: *Args.FlagParser, arg: [:0]const u8, _: *Args.ArgIterator) Args.Error!bool {
         var self = @as(*Flags, @fieldParentPtr("flag_parser", flag_parser));
 
         if (Args.eqlFlag(arg, "--help", "-h")) {

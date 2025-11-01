@@ -1,4 +1,5 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 const Args = @This();
 
@@ -6,7 +7,7 @@ args: [][:0]const u8,
 positional: [][:0]const u8,
 program_path: [:0]const u8,
 
-pub fn init(allocator: std.mem.Allocator, flag_parser: *FlagParser) !Args {
+pub fn init(allocator: Allocator, flag_parser: *FlagParser) !Args {
     var iter = try ArgIterator.init(allocator);
     defer iter.deinit();
     const program_path = try allocator.dupeZ(u8, iter.next().?);
@@ -25,22 +26,23 @@ pub fn init(allocator: std.mem.Allocator, flag_parser: *FlagParser) !Args {
     };
 }
 
-pub fn deinit(self: *Args, allocator: std.mem.Allocator) void {
+pub fn deinit(self: *Args, allocator: Allocator) void {
     allocator.free(self.program_path);
     allocator.free(self.args);
     allocator.free(self.positional);
     self.* = undefined;
 }
 
+pub const Error = error{ MissingValue, ParseFailed } || Allocator.Error || std.fs.Dir.StatFileError;
+
 pub const FlagParser = struct {
-    pub const Error = error{ MissingValue, ParseFailed } || std.mem.Allocator.Error || std.fs.Dir.StatFileError;
     parseFn: *const fn (*FlagParser, [:0]const u8, *ArgIterator) Error!bool,
 };
 
 pub const ArgIterator = struct {
     inner: std.process.ArgIterator,
 
-    pub fn init(allocator: std.mem.Allocator) !ArgIterator {
+    pub fn init(allocator: Allocator) !ArgIterator {
         return .{
             .inner = try std.process.argsWithAllocator(allocator),
         };
@@ -56,17 +58,38 @@ pub const ArgIterator = struct {
     }
 
     pub inline fn nextOrFail(self: *ArgIterator) ![:0]const u8 {
-        return self.inner.next() orelse FlagParser.Error.MissingValue;
+        return self.inner.next() orelse Error.MissingValue;
     }
 
     pub inline fn nextInt(self: *ArgIterator, T: type, base: u8) !T {
         const arg = try self.nextOrFail();
-        return std.fmt.parseInt(T, arg, base) catch return FlagParser.Error.ParseFailed;
+        return std.fmt.parseInt(T, arg, base) catch return Error.ParseFailed;
     }
 
     pub inline fn nextFloat(self: *ArgIterator, T: type) !T {
         const arg = try self.nextOrFail();
-        return std.fmt.parseFloat(T, arg) catch FlagParser.Error.ParseFailed;
+        return std.fmt.parseFloat(T, arg) catch Error.ParseFailed;
+    }
+
+    pub inline fn nextEnum(self: *ArgIterator, T: type) !T {
+        const arg = try self.nextOrFail();
+        return std.meta.stringToEnum(T, arg) catch return Error.ParseFailed;
+    }
+
+    pub inline fn nextZonFileParse(self: *ArgIterator, T: type, allocator: Allocator, diagnostics: ?*std.zon.parse.Diagnostics, options: std.zon.parse.Options) !T {
+        const file_path = try self.nextFilePath();
+        if (file_path.stat.kind != .file) return Error.ParseFailed;
+        const file = try std.fs.cwd().openFile(file_path.path, .{});
+        defer file.close();
+        // TODO: can i remove this buffer? it seems like it might not be needed when streamReamaing to Writer.Allocating...
+        var buffer: [4 * 1024]u8 = undefined;
+        var file_reader = file.reader(&buffer);
+        var allocating = std.Io.Writer.Allocating.init(allocator);
+        errdefer allocating.deinit();
+        _ = file_reader.interface.streamRemaining(&allocating.writer) catch return error.OutOfMemory;
+        const file_content = try allocating.toOwnedSliceSentinel(0);
+        defer allocator.free(file_content);
+        return std.zon.parse.fromSlice(T, allocator, file_content, diagnostics, options) catch Error.ParseFailed;
     }
 
     pub const FilePath = struct {

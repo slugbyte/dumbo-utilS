@@ -158,7 +158,7 @@ const Flags = struct {
         }
     };
 
-    pub fn implParseFn(flag_parser: *Args.FlagParser, arg: [:0]const u8, _: *Args.ArgIterator) Args.FlagParser.Error!bool {
+    pub fn implParseFn(flag_parser: *Args.FlagParser, arg: [:0]const u8, _: *Args.ArgIterator) Args.Error!bool {
         var self = @as(*Flags, @fieldParentPtr("flag_parser", flag_parser));
 
         if (Args.eqlFlag(arg, "--trash", "-t")) {
