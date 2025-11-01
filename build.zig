@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = config.optimize,
                 .imports = &.{
                     .{ .name = "util", .module = util_mod },
-                    .{ .name = "config", .module = config.createOptionsModule() },
+                    .{ .name = "build_option", .module = config.createBuildOptionModule() },
                 },
             }),
         });

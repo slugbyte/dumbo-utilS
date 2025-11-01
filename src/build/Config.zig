@@ -52,7 +52,7 @@ pub fn init(b: *std.Build) Config {
     };
 }
 
-pub fn createOptionsModule(self: Config) *std.Build.Module {
+pub fn createBuildOptionModule(self: Config) *std.Build.Module {
     var config = self.build.addOptions();
     config.addOption([]const u8, "date", self.date);
     config.addOption([]const u8, "commit_id", self.commit_id);

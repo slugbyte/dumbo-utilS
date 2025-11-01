@@ -1,6 +1,6 @@
 const std = @import("std");
 const util = @import("util");
-const config = @import("config");
+const build_option = @import("build_option");
 const Args = util.Args;
 const basename = std.fs.path.basename;
 
@@ -37,12 +37,12 @@ pub fn main() !void {
     var args = try Args.init(allocator, &flag.flag_parser);
 
     if (flag.help) {
-        util.log("{s}\n\n  Version:\n    {s} {s} {s} ({s})", .{ help_msg, config.version, config.change_id[0..8], config.commit_id[0..8], config.date });
+        util.log("{s}\n\n  Version:\n    {s} {s} {s} ({s})", .{ help_msg, build_option.version, build_option.change_id[0..8], build_option.commit_id[0..8], build_option.date });
         return;
     }
 
     if (flag.version) {
-        util.log("move {s} {s} {s} ({s})", .{ config.version, config.change_id[0..8], config.commit_id[0..8], config.date });
+        util.log("move {s} {s} {s} ({s})", .{ build_option.version, build_option.change_id[0..8], build_option.commit_id[0..8], build_option.date });
         return;
     }
 
