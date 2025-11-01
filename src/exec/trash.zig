@@ -14,45 +14,64 @@ pub const help_msg =
 ;
 
 pub fn main() !void {
-    var gpa = std.heap.DebugAllocator(.{}).init;
-    const allocator = gpa.allocator();
+    var arena_instance = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const arena = arena_instance.allocator();
+    var warning_list: util.WarningList = .init(arena);
 
-    if (!try util.env.exists("trash")) {
-        return util.exit("ERROR: $trash must be set", .{});
+    if (util.env.exists("trash")) {
+        util.log("ERROR: $trash must be set", .{});
+        warning_list.EXIT(1);
     }
 
     var flag = Flags{};
-    const args = try Args.init(allocator, &flag.flag_parser);
+    const args = try Args.init(arena, &flag.flag_parser);
 
     if (flag.help) {
-        util.log("{s}\n\n  Version:\n   {s} {s} {s} ({s})", .{ help_msg, build_option.version, build_option.change_id[0..8], build_option.commit_id[0..8], build_option.date });
+        util.log("{s}\n\n  Version:\n   {s} {s} {s} ({s})", .{
+            help_msg,
+            build_option.version,
+            build_option.change_id[0..8],
+            build_option.commit_id[0..8],
+            build_option.date,
+        });
         return;
     }
 
     if (flag.version) {
-        util.log("trash {s} {s} {s} ({s})", .{ build_option.version, build_option.change_id[0..8], build_option.commit_id[0..8], build_option.date });
+        util.log("trash {s} {s} {s} ({s})", .{
+            build_option.version,
+            build_option.change_id[0..8],
+            build_option.commit_id[0..8],
+            build_option.date,
+        });
         return;
     }
 
     if (args.positional.len == 0) {
-        return util.exit("USAGE: trash [file]...", .{});
+        util.log("USAGE: trash [file]...", .{});
+        warning_list.EXIT(1);
     }
 
     const wd = util.WorkDir.initCWD();
-    for (args.positional) |arg| {
-        if (try wd.exists(arg)) {
-            const stat = try wd.stat(arg);
-            const trash_path = wd.trashKind(arg, stat.kind) catch |err| switch (err) {
-                error.TrashFileKindNotSupported => {
-                    return util.exit("ERROR: can't trah kind ({s}). {s}", .{ @tagName(stat.kind), arg });
-                },
-                else => return err,
-            };
-            if (!flag.silent) util.log("{s} > $trash/{s}", .{ arg, std.fs.path.basename(trash_path) });
-        } else {
-            util.log("file not found: {s}", .{arg});
-        }
+    for (args.positional) |path| {
+        const stat = wd.stat(path) catch |err| switch (err) {
+            else => warning_list.PANIC("unexpected error: {t}", .{err}),
+            error.FileNotFound => {
+                try warning_list.pushWarning("file not found: {s}", .{path});
+                continue;
+            },
+        };
+        const trash_path = wd.trashKind(path, stat.kind) catch |err| switch (err) {
+            else => warning_list.PANIC("unexpected error: {t}", .{err}),
+            error.TrashFileKindNotSupported => {
+                try warning_list.pushWarning("trash does not support '{t}' files, unable to trash: {s}", .{ stat.kind, path });
+                continue;
+            },
+        };
+        if (!flag.silent) util.log("{s} > $trash/{s}", .{ path, std.fs.path.basename(trash_path) });
     }
+    warning_list.report();
+    warning_list.EXIT(null);
 }
 
 const Flags = struct {

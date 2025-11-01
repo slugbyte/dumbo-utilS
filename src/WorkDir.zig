@@ -47,7 +47,7 @@ pub fn stat(self: WorkDir, path: []const u8) !std.fs.File.Stat {
 }
 
 pub fn exists(self: WorkDir, path: []const u8) !bool {
-    self.dir.access(path, .{}) catch |err| switch (err) {
+    _ = self.stat(path) catch |err| switch (err) {
         error.FileNotFound => return false,
         else => return err,
     };

@@ -76,18 +76,25 @@ pub const ArgIterator = struct {
         return std.meta.stringToEnum(T, arg) catch return Error.ParseFailed;
     }
 
-    pub inline fn nextZonFileParse(self: *ArgIterator, T: type, allocator: Allocator, diagnostics: ?*std.zon.parse.Diagnostics, options: std.zon.parse.Options) !T {
+    pub inline fn nextFileOpen(self: *ArgIterator) !std.fs.File {
         const file_path = try self.nextFilePath();
         if (file_path.stat.kind != .file) return Error.ParseFailed;
-        const file = try std.fs.cwd().openFile(file_path.path, .{});
-        defer file.close();
+        return try std.fs.cwd().openFile(file_path.path, .{});
+    }
+
+    pub inline fn nextFileRead(self: *ArgIterator, allocator: Allocator) ![:0]const u8 {
+        const file = try self.nextFileOpen();
         // TODO: can i remove this buffer? it seems like it might not be needed when streamReamaing to Writer.Allocating...
         var buffer: [4 * 1024]u8 = undefined;
         var file_reader = file.reader(&buffer);
         var allocating = std.Io.Writer.Allocating.init(allocator);
         errdefer allocating.deinit();
         _ = file_reader.interface.streamRemaining(&allocating.writer) catch return error.OutOfMemory;
-        const file_content = try allocating.toOwnedSliceSentinel(0);
+        return try allocating.toOwnedSliceSentinel(0);
+    }
+
+    pub inline fn nextFileParseZon(self: *ArgIterator, T: type, allocator: Allocator, diagnostics: ?*std.zon.parse.Diagnostics, options: std.zon.parse.Options) !T {
+        const file_content = try self.nextFileRead(Allocator);
         defer allocator.free(file_content);
         return std.zon.parse.fromSlice(T, allocator, file_content, diagnostics, options) catch Error.ParseFailed;
     }

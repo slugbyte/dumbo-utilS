@@ -4,6 +4,7 @@ const std = @import("std");
 pub const env = @import("./env.zig");
 pub const path = @import("./path.zig");
 
+pub const WarningList = @import("./WarningList.zig");
 pub const WorkDir = @import("./WorkDir.zig");
 pub const Args = @import("./Args.zig");
 
@@ -13,7 +14,7 @@ pub fn log(comptime fmt: []const u8, args: anytype) void {
     std.debug.print("{s}\n", .{msg});
 }
 
-pub fn exit(comptime fmt: []const u8, arg: anytype) noreturn {
+pub fn exit(status: u8, comptime fmt: []const u8, arg: anytype) noreturn {
     log(fmt, arg);
-    std.process.exit(1);
+    std.process.exit(status);
 }
