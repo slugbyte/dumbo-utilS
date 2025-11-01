@@ -33,7 +33,7 @@ pub fn deinit(self: *Args, allocator: std.mem.Allocator) void {
 }
 
 pub const FlagParser = struct {
-    pub const Error = error{ParseFailed} || std.mem.Allocator.Error;
+    pub const Error = error{ MissingValue, ParseFailed } || std.mem.Allocator.Error || std.fs.Dir.StatFileError;
     parseFn: *const fn (*FlagParser, [:0]const u8, *ArgIterator) Error!bool,
 };
 
@@ -56,7 +56,7 @@ pub const ArgIterator = struct {
     }
 
     pub inline fn nextOrFail(self: *ArgIterator) ![:0]const u8 {
-        return self.inner.next() orelse FlagParser.Error.ParseFailed;
+        return self.inner.next() orelse FlagParser.Error.MissingValue;
     }
 
     pub inline fn nextInt(self: *ArgIterator, T: type, base: u8) !T {
@@ -67,6 +67,20 @@ pub const ArgIterator = struct {
     pub inline fn nextFloat(self: *ArgIterator, T: type) !T {
         const arg = try self.nextOrFail();
         return std.fmt.parseFloat(T, arg) catch FlagParser.Error.ParseFailed;
+    }
+
+    pub const FilePath = struct {
+        stat: std.fs.File.Stat,
+        path: [:0]const u8,
+    };
+
+    pub inline fn nextFilePath(self: *ArgIterator) !FilePath {
+        const arg = try self.nextOrFail();
+        const stat = try std.fs.cwd().statFile(arg);
+        return .{
+            .path = arg,
+            .stat = stat,
+        };
     }
 
     pub inline fn skip(self: *ArgIterator) ?[:0]const u8 {

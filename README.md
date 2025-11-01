@@ -33,8 +33,7 @@ Usage: move src.. dest (--flags)
   Other Flags:
     --version     print version
     -r --rename   just replace the basename with dest
-    -s --silent   dont print clobber info
-    -v --verbose  print the move paths
+    -s --silent   only print errors
     -h --help     print this help
 ```
 
